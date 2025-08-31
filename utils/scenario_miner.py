@@ -6,7 +6,19 @@ from parameters.tags_dict import *
 class ScenarioMiner:
     def __init__(self) -> None:
         pass
-
+    #addition
+    def add_inter_actor_distance(inter_actor_relation: dict, actor_positions: dict):
+        """
+        Compute Euclidean distance between each pair of actors and add it to inter_actor_relation.
+        inter_actor_relation[agent_key][other_actor]['distance'] = np.array(...)
+        """
+        for agent_key, relations in inter_actor_relation.items():
+            pos_agent = actor_positions[agent_key]  # shape: (num_frames, 2)
+            for other_actor, relation_dict in relations.items():
+                pos_other = actor_positions[other_actor]
+                # compute Euclidean distance over all frames
+                distance = np.linalg.norm(pos_agent - pos_other, axis=1)
+                relation_dict['distance'] = distance
     def mining(self, tags_dict: dict) -> dict:
         actors_list = tags_dict['general_info']['actors_list']
         inter_actor_relation = tags_dict['inter_actor_relation']
@@ -63,19 +75,28 @@ class ScenarioMiner:
                 for (actor_name, inter_actor_relation_position) in inter_actor.items():
                     solo_scenarios[actor_type][agent_key]['inter_actor'][actor_name] = {}
                     for (handel, value) in inter_actor_relation_position.items():
-                        turning_points = self.__computing_turning_point(value, valid_start, valid_end)
-                        if handel == 'position':
-                            inter_actor_dict = inter_actor_position_dict
-                        elif handel == 'relation':
-                            inter_actor_dict = inter_actor_relation_dict
+                        if handel == 'distance':
+                            #modified
+                            # just store the raw distance array
+                            try:
+                                solo_scenarios[actor_type][agent_key]['inter_actor'][actor_name][handel] = value
+                            except Exception as e:
+                                raise ValueError(f"Error: {e}.\n{actor_name} {handel} {value}")
+                                               
                         else:
-                            inter_actor_dict = inter_actor_heading_dict
-                        try:
-                            solo_scenarios[actor_type][agent_key]['inter_actor'][actor_name][
-                                handel] = self.__summarizing_events(value, turning_points, valid_start, valid_end,
-                                                                    actor_name, inter_actor_dict)
-                        except Exception as e:
-                            raise ValueError(f"Error: {e}.\n{actor_name} {handel} {value}")
+                            turning_points = self.__computing_turning_point(value, valid_start, valid_end)
+                            if handel == 'position':
+                                inter_actor_dict = inter_actor_position_dict
+                            elif handel == 'relation':
+                                inter_actor_dict = inter_actor_relation_dict
+                            else:
+                                inter_actor_dict = inter_actor_heading_dict
+                            try:
+                                solo_scenarios[actor_type][agent_key]['inter_actor'][actor_name][
+                                    handel] = self.__summarizing_events(value, turning_points, valid_start, valid_end,
+                                                                        actor_name, inter_actor_dict)
+                            except Exception as e:
+                                raise ValueError(f"Error: {e}.\n{actor_name} {handel} {value}")
         return solo_scenarios
 
     def __computing_turning_point(self, activity, valid_start: int, valid_end: int) -> list:

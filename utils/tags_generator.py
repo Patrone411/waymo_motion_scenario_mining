@@ -105,6 +105,10 @@ class TagsGenerator:
                 x = agent_state.kinematics['x']
                 y = agent_state.kinematics['y']
                 theta = agent_state.kinematics['bbox_yaw']
+                # Add positions
+                agent_activity['x'] = x.tolist()
+                agent_activity['y'] = y.tolist()
+                agent_activity['heading'] = theta.tolist()
 
                 agent_extended_polygons = AgentExtendedPolygons(actor_type, agent_key, etp, ebb, time_steps, x, y,
                                                                 theta)
@@ -415,66 +419,77 @@ class TagsGenerator:
 
         return actor_road_lane_change.tolist()
 
-    def __generate_inter_actor_relation(self, agent_pp_state_list: list):
+    def __generate_inter_actor_relation(self, agent_pp_state_list: list): #modified
         """
-        generate the inter actor relation
-        refer the parameters.tag_dict for the meaning of the relation 
+        generate the inter actor relation including distance
         """
         print(f"generating inter actor relation...")
         new_tag_dict = exchange_key_value(inter_actor_relation_dict)
         inter_actor_relation = {}
+
         for agent_pp_state_1 in agent_pp_state_list:
             agent_key_1 = agent_pp_state_1.key
-            # agent_type_1 = agent_pp_state_1.type
             agent_etp_1 = agent_pp_state_1.etp
             agent_ebb_1 = agent_pp_state_1.ebb
             length = agent_pp_state_1.length
             inter_actor_relation[agent_key_1] = {}
-            for agent_pp_state_2 in agent_pp_state_list:
 
+            for agent_pp_state_2 in agent_pp_state_list:
                 if agent_pp_state_2.key == agent_key_1:
                     continue
-                else:
-                    agent_key_2 = agent_pp_state_2.key
-                # agent_type_2 = agent_pp_state_2.type
+                agent_key_2 = agent_pp_state_2.key
                 agent_etp_2 = agent_pp_state_2.etp
                 agent_ebb_2 = agent_pp_state_2.ebb
+
                 relation = np.ones(length) * float(new_tag_dict['not related'])
                 position = np.ones(length) * float(new_tag_dict['not related'])
                 heading_dir = np.ones(length) * float(new_tag_dict['not related'])
+                distance = np.zeros(length)  # <-- new distance array
+            
                 for step in range(length):
                     if agent_etp_1[step][0].area == 0 or agent_etp_2[step][0].area == 0:
                         continue
-                    else:
-                        etp_flag = 0
-                        for i, (polygon_1, _) in enumerate(zip(agent_etp_1[step], agent_etp_2[step])):
-                            intersection_etp = self.__compute_intersection_area(polygon_1, agent_etp_2[step][i])
-                            if intersection_etp:
-                                etp_flag = 1
-                                break
-                        intersection_ebb = self.__compute_intersection_area(agent_ebb_1[step], agent_ebb_2[step])
-                        if etp_flag and intersection_ebb:
-                            relation[step] = float(new_tag_dict['estimated collision+close proximity'])
-                        elif etp_flag and not intersection_ebb:
-                            relation[step] = float(new_tag_dict['estimated collision'])
-                        elif not etp_flag and intersection_ebb:
-                            relation[step] = float(new_tag_dict['close proximity'])
-                        position[step] = self.__compute_actor_position_relation(agent_pp_state_1.x[step],
-                                                                                agent_pp_state_1.y[step],
-                                                                                agent_pp_state_1.theta[step],
-                                                                                agent_pp_state_2.x[step],
-                                                                                agent_pp_state_2.y[step])
-                        try:
-                            heading_dir[step] = self.compute_inter_actor_heading(agent_pp_state_1.theta[step],
-                                                                                 agent_pp_state_2.theta[step])
-                        except Exception as e:
-                            raise ValueError(f"Error:{e}.\nAgent1: {agent_key_1}, Agent2: {agent_key_2}, Step: {step}.")
-                        # compute the position relation
+                    # existing intersection checks
+                    etp_flag = 0
+                    for i, (polygon_1, _) in enumerate(zip(agent_etp_1[step], agent_etp_2[step])):
+                        intersection_etp = self.__compute_intersection_area(polygon_1, agent_etp_2[step][i])
+                        if intersection_etp:
+                            etp_flag = 1
+                            break
+                    intersection_ebb = self.__compute_intersection_area(agent_ebb_1[step], agent_ebb_2[step])
+                    if etp_flag and intersection_ebb:
+                        relation[step] = float(new_tag_dict['estimated collision+close proximity'])
+                    elif etp_flag and not intersection_ebb:
+                        relation[step] = float(new_tag_dict['estimated collision'])
+                    elif not etp_flag and intersection_ebb:
+                        relation[step] = float(new_tag_dict['close proximity'])
+
+                    # position relation
+                    position[step] = self.__compute_actor_position_relation(
+                        agent_pp_state_1.x[step], agent_pp_state_1.y[step], agent_pp_state_1.theta[step],
+                        agent_pp_state_2.x[step], agent_pp_state_2.y[step]
+                    )
+
+                    # heading relation
+                    try:
+                        heading_dir[step] = self.compute_inter_actor_heading(
+                            agent_pp_state_1.theta[step], agent_pp_state_2.theta[step]
+                        )
+                    except Exception as e:
+                        raise ValueError(f"Error:{e}.\nAgent1: {agent_key_1}, Agent2: {agent_key_2}, Step: {step}.")
+
+                    # new distance computation
+                    dx = agent_pp_state_2.x[step] - agent_pp_state_1.x[step]
+                    dy = agent_pp_state_2.y[step] - agent_pp_state_1.y[step]
+                    distance[step] = np.sqrt(dx**2 + dy**2)
+
                 if np.sum(relation):
-                    inter_actor_relation[agent_key_1][agent_key_2] = {}
-                    inter_actor_relation[agent_key_1][agent_key_2]['relation'] = relation.tolist()
-                    inter_actor_relation[agent_key_1][agent_key_2]['position'] = position.tolist()
-                    inter_actor_relation[agent_key_1][agent_key_2]['heading'] = heading_dir.tolist()
+                    inter_actor_relation[agent_key_1][agent_key_2] = {
+                        'relation': relation.tolist(),
+                        'position': position.tolist(),
+                        'heading': heading_dir.tolist(),
+                        'distance': distance.tolist()  # <-- store distances here
+                    }
 
         return inter_actor_relation
 
