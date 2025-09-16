@@ -9,7 +9,7 @@ import tensorflow as tf
 from shapely.geometry import Polygon
 from shapely.ops import unary_union
 
-from logger.logger import *
+from .logger.logger import *
 
 
 class Actor(ABC):

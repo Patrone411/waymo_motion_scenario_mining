@@ -1,10 +1,10 @@
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
-from actor import Actor
+from .actor import Actor
 import numpy as np
-from data_preprocessing import univariate_spline
-from logger.logger import logger
-from parameters.tags_dict import lo_act_dict
+from .data_preprocessing import univariate_spline
+from .logger.logger import logger
+from .parameters.tags_dict import lo_act_dict
 
 class LongActDetector:
     """

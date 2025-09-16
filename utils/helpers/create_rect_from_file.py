@@ -4,7 +4,7 @@ Create a rectangular object for testing from a file
 import os 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 import tensorflow as tf
-from actor import Actor
+from ..actor import Actor
 from .data_parser import features_description
 from .carla_data_parser import parse_carla_data
 import random
